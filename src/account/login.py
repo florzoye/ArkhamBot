@@ -2,6 +2,9 @@ from loguru import logger
 import aiohttp
 import json
 import asyncio
+from yarl import URL
+import time
+import os
 
 from data import config
 from utils.session import AsyncSession, check_ip
@@ -16,10 +19,16 @@ from utils.get_prices import ArkhamPrices
 class ArkhamLogin:
     def __init__(self,
                 session: aiohttp.ClientSession,
-                turnstile_token: str):
+                turnstile_token: str | None = None):
         self.session = session
         self.token = turnstile_token
-
+        
+    async def get_cookies_json(self, url: str = "https://arkm.com") -> str:
+        """Вернуть куки текущей сессии в формате JSON-строки"""
+        cookies = self.session.cookie_jar.filter_cookies(URL(url))
+        dict_cookies = {key: cookie.value for key, cookie in cookies.items()}
+        dict_cookies["created_at"] = int(time.time()) 
+        return dict_cookies
     
     async def headers(self, action: str | None = None):
         if action == 'login':
@@ -50,12 +59,6 @@ class ArkhamLogin:
             'code': code_2fa,
         }
             
-    async def get_cookies_json(self, url: str = "https://arkm.com") -> str:
-        """Вернуть куки текущей сессии в формате JSON-строки"""
-        cookies = self.session.cookie_jar.filter_cookies(url)
-        cookies_dict = {key: cookie.value for key, cookie in cookies.items()}
-        return json.dumps(cookies_dict, ensure_ascii=False, indent=2)
-    
     async def login_arkham(self):
         async with self.session.get(config.PAGE_URL) as resp:
             logger.info(f"Загрузили страницу логина: {resp.status}")
@@ -112,78 +115,135 @@ def input_2fa():
     code = input("> ").strip()
     return code
 
+def check_cookies_file(path: str = config.COOKIE_FILE) -> bool:
+    """Проверить, что cookies.json существует и ещё не устарел"""
+    if not os.path.exists(path):
+        return False
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)  
+        created_at = data.get("created_at") or data.get("time")
+        if not created_at:
+            return False
+        age = int(time.time()) - int(created_at)
+        return age < 3600  # True если куки свежее часа
+    except (json.JSONDecodeError, OSError, ValueError):
+        return False
 
+async def apply_cookies(session, path: str = config.COOKIE_FILE, url: str = "https://arkm.com"):
+    """Загрузить куки из файла и добавить их в aiohttp.ClientSession"""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        cookies = {k: v for k, v in data.items() if k not in ("created_at", "time")}
+        session.cookie_jar.update_cookies(cookies, response_url=URL(url))
+        return True
+    except Exception as e:
+        print(f"Ошибка загрузки cookies: {e}")
+        return False
 
 async def main():
-    # создаём aiohttp-сессию с настройками
-    async with AsyncSession() as session:
-        ip = await check_ip(session=session)
-        # решаем капчу
-        solver = TwoCaptcha(session)
-        token = await solver.solve_turnstile()
-
-        if not token:
-            logger.error("❌ Не удалось получить токен Turnstile")
-            return
-
-        # пробуем войти в Arkham
-        arkham = ArkhamLogin(session, turnstile_token=token)
-        success = await arkham.login_arkham()
-
-        if success:
-            cookies_json = await arkham.get_cookies_json()
-            logger.success("✅ Вход выполнен, куки получены:")
-            if config.ENABLE_2FA:
-                two_fa_code = input_2fa()
-                verified = await arkham.verify_2FA(two_fa_code)
-
-                ins = ArkhamInfo(session)
-
-                balance = await ins.get_balance()
-                point = await ins.get_volume_or_points(action='points')
-                volume = await ins.get_volume_or_points(action='volume')
-                fee_margin, fee_credit = await ins.get_fee_margin()
-                logger.success(f"""
-                                Бонусные очки: {point}, Торговый объём: {volume} 
-                                Бонус за торговый объём: {fee_margin}, Кредит за комиссии: {fee_credit}
-                                Баланс: {balance}""")
-                arkham = ArkhamLeverage(session)
-                leverage = "3"
-                await arkham.set_leverage('BTC', leverage)
-                await arkham.check_leverage('BTC')
-
-                price_client = ArkhamPrices(
-                    api_key=config.ARKHAM_API_KEY,
-                    api_secret=config.ARKHAM_API_SECRET,
-                    session=session
-                ) 
-                data = await price_client.get_futures_price('BTC')
-                price = data.get('mark_price')
-
-                size = PositionSizer(
-                    balance=float(balance),
-                    leverage=int(leverage),
-                    price=float(price),
-                    risk_pct=40
-                ).calculate_size()
-
-                trader = ArkhamTrading(
-                    session=session,
-                    coin='BTC',
-                    size=size,
-                    price=price
-                )
-                size = (await ins.get_all_positions()).get('BTC')['base']
-                asyncio.sleep(2)
-                cancel = await trader.futures_close_long_market(position_size=float(size))
-            else:
-                logger.info("2FA отключена, пропускаем")
-
+    async with aiohttp.ClientSession() as session:
+        if check_cookies_file():
+            await apply_cookies(session)
+            print("✅ Загружены старые куки в сессию")
+            ins = ArkhamInfo(session)
+            balance = await ins.get_balance()
+            print(f"Баланс: {balance}")
         else:
-            logger.error("❌ Вход в Arkham не удался")
+            print("⚠️ Куки устарели → логинимся заново")
+            solver = TwoCaptcha(session)
+            token = await solver.solve_turnstile()
+
+            arkham = ArkhamLogin(session, token)
+            await arkham.login_arkham()
+            two_fa_code = input_2fa()
+            verified = await arkham.verify_2FA(two_fa_code)
+            cookies_dict  = await arkham.get_cookies_json()
+            with open(config.COOKIE_FILE, "w", encoding="utf-8") as f:
+                json.dump(cookies_dict, f, indent=2, ensure_ascii=False)
+
+    # создаём aiohttp-сессию с настройками
+    # async with AsyncSession() as session:
+    #     ip = await check_ip(session=session)
+    #     # решаем капчу
+    #     solver = TwoCaptcha(session)
+    #     token = await solver.solve_turnstile()
+
+    #     if not token:
+    #         logger.error("❌ Не удалось получить токен Turnstile")
+    #         return
+
+    #     # пробуем войти в Arkham
+    #     arkham = ArkhamLogin(session, turnstile_token=token)
+    #     success = await arkham.login_arkham()
+
+    #     if success:
+    #         logger.success("✅ Вход выполнен, куки получены:")
+    #         if config.ENABLE_2FA:
+    #             two_fa_code = input_2fa()
+    #             verified = await arkham.verify_2FA(two_fa_code)
+    #             cookies_dict  = await arkham.get_cookies_json()
+    #             with open(config.COOKIE_FILE, "w", encoding="utf-8") as f:
+    #                 json.dump(cookies_dict, f, indent=2, ensure_ascii=False)
+
+            #     ins = ArkhamInfo(session)
+
+            #     balance = await ins.get_balance()
+            #     point = await ins.get_volume_or_points(action='points')
+            #     volume = await ins.get_volume_or_points(action='volume')
+            #     fee_margin, fee_credit = await ins.get_fee_margin()
+            #     logger.success(f"""
+            #                     Бонусные очки: {point}, Торговый объём: {volume} 
+            #                     Бонус за торговый объём: {fee_margin}, Кредит за комиссии: {fee_credit}
+            #                     Баланс: {balance}""")
+            #     arkham = ArkhamLeverage(session)
+            #     leverage = "3"
+            #     await arkham.set_leverage('BTC', leverage)
+            #     await arkham.check_leverage('BTC')
+
+            #     price_client = ArkhamPrices(
+            #         api_key=config.ARKHAM_API_KEY,
+            #         api_secret=config.ARKHAM_API_SECRET,
+            #         session=session
+            #     ) 
+            #     data = await price_client.get_futures_price('BTC')
+            #     price = data.get('mark_price')
+
+            #     size = PositionSizer(
+            #         balance=float(balance),
+            #         leverage=int(leverage),
+            #         price=float(price),
+            #         risk_pct=40
+            #     ).calculate_size()
+
+            #     trader = ArkhamTrading(
+            #         session=session,
+            #         coin='BTC',
+            #         size=size,
+            #         price=price,
+            #         info_client=ins
+            #     )
+            #     # order = await trader.futures_long_limit()
+            # # await asyncio.sleep(5)  # ждём 5 секунд перед закрытием позиции
+            #     size = (await ins.get_all_positions()).get('BTC')['base']
+            #     await asyncio.sleep(2)  
+            #     cancel = await trader.futures_close_position_market()
+        #     else:
+        #         logger.info("2FA отключена, пропускаем")
+
+        # else:
+        #     logger.error("❌ Вход в Arkham не удался")
 
 
 if __name__ == "__main__":
+    with open(config.COOKIE_FILE, "r", encoding="utf-8") as f:
+        content = f.read().strip()
+        if content:
+            print("Файл не пустой")
+        else:
+            print("Файл пустой")
     asyncio.run(main())
 
 
