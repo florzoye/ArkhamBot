@@ -4,7 +4,6 @@ class ArkhamLeverage:
     def __init__(self, session: aiohttp.ClientSession):
         self.session = session
 
-    
     async def headers(self, action: str | None = None):
         if action == 'set':
             return {
@@ -16,17 +15,11 @@ class ArkhamLeverage:
             return {
                 'referer': 'https://arkm.com/uk/trade/BTC_USDT_PERP',
             }
-        
 
     async def create_json_data(self,
                                 symbol: str | None = None,
                                 leverage: str | int | None = None,
                                 action: str | None = None):
-        """Передать символ и кредитное плечо для создания json_data
-        Args:
-            symbol (str): Символ, например 'BTC'
-            leverage (str): Кредитное плечо, например '12'
-        """
         if action == 'set':
             return {
                 'symbol': f'{symbol}_USDT_PERP',
@@ -60,6 +53,7 @@ class ArkhamLeverage:
 
 
     async def check_leverage(self, symbol: str, leverage: str | int|  None = None):
+        """Проверить текущее кредитное плечо для заданного символа"""
         async with self.session.get(
             'https://arkm.com/api/account/leverage',
             params=await self.create_json_data(),

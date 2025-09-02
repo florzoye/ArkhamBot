@@ -1,6 +1,9 @@
 import aiohttp
 from loguru import logger
 
+from data import config
+from src.account.info import ArkhamInfo
+
 
 class ArkhamTrading:
     """
@@ -20,7 +23,7 @@ class ArkhamTrading:
         coin: str,
         size: str | int | float,
         price: str | int | float = None,
-        info_client = None,  # ArkhamInfo instance
+        info_client: ArkhamInfo | None = None, 
     ):
         self.session = session
         self.coin = coin.upper()
@@ -62,14 +65,9 @@ class ArkhamTrading:
         custom_size: float = None
     ):
         """Создание данных для ордера"""
-        
-        # Определяем символ
         symbol = f"{self.coin}_USDT_PERP" if is_futures else f"{self.coin}_USDT"
-        
-        # Определяем тип ордера
         order_type_api = "market" if order_type == "market" else "limitGtc"
-        
-        # Определяем размер
+
         if use_custom_size and custom_size is not None:
             if reduce_only:
                 size = self.adjust_reduce_size(custom_size)
@@ -97,7 +95,6 @@ class ArkhamTrading:
         """Отправка запроса на создание ордера"""
         try:
             headers = self._get_headers(is_futures="_PERP" in order_data["symbol"])
-            
             async with self.session.post(
                 "https://arkm.com/api/orders/new",
                 headers=headers,
@@ -148,7 +145,7 @@ class ArkhamTrading:
         """
         if sell_size is None and self.info_client:
             # Автоматически получаем баланс монеты на споте
-            spot_balance = await self.info_client.get_spot_balance(self.coin)
+            spot_balance = await self.info_client.get_spot_balance(self.coin) # метода нет
             if spot_balance <= 0:
                 logger.warning(f"Недостаточный баланс {self.coin} на споте для продажи: {spot_balance}")
                 return False
@@ -332,7 +329,7 @@ class ArkhamTrading:
             # Автоматически получаем размер позиции  
             positions = await self.info_client.get_all_positions()
             if self.coin in positions:
-                position_size = abs(min(0, positions[self.coin]["base"]))  # только отрицательные, делаем положительными
+                position_size = abs(min(0, positions[self.coin]["base"]))  
             else:
                 position_size = float(self.size)
         else:
@@ -377,7 +374,7 @@ class ArkhamTrading:
         поэтому размеры для продажи нужно указывать вручную!
         """
         
-        # Валидация параметров
+        # Параметры
         if side not in ("buy", "sell"):
             raise ValueError("side должен быть 'buy' или 'sell'")
         if order_type not in ("market", "limit"):

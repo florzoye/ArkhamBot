@@ -1,6 +1,6 @@
 import aiosqlite
 from contextlib import asynccontextmanager
-from .tradeDB import NewsSQL  
+from .tradeDB import TradeSQL  
 
 
 class AsyncDatabaseManager:
@@ -22,4 +22,4 @@ class AsyncDatabaseManager:
 
     async def get_info_handler(self):
         async with self.get_cursor() as cursor:
-            return NewsSQL(cursor)
+            return TradeSQL(cursor)

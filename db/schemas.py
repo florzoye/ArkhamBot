@@ -1,5 +1,3 @@
-
-
 def get_insert_spread_sql(table_name: str) -> str:
     return f"""
     INSERT INTO {table_name} (
@@ -8,11 +6,8 @@ def get_insert_spread_sql(table_name: str) -> str:
     VALUES (?, ?, ?)
     """
 
-
 def get_select_all_sql(table_name: str) -> str:
     return f"SELECT * FROM {table_name}"
-
-
 
 def get_info_table_sql(table_name: str) -> str:
     return f"""
@@ -24,11 +19,11 @@ def get_info_table_sql(table_name: str) -> str:
     )
     """
 
-
 def get_update_info_sql(table_name: str) -> str:
     return f"""
     UPDATE {table_name} 
-    SET account = :account, account = :account, points := points, volume := volume
+    SET balance = :balance, points = :points, volume = :volume
+    WHERE account = :account
     """
 
 def get_insert_info_sql(table_name: str) -> str:

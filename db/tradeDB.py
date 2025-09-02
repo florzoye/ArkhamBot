@@ -16,7 +16,6 @@ class TradeSQL:
         await self.conn.commit()
 
     async def add_info(self, table_name: str, news: Dict) -> None:
-        # Проверим есть ли запись (например по account)
         async with self.conn.execute(f"SELECT 1 FROM {table_name} WHERE account = :account", news) as cursor:
             existing = await cursor.fetchone()
 

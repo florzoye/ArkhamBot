@@ -9,6 +9,15 @@ import json
 
 
 class ArkhamPrices:
+    """
+    Клиент для получения цен спота и фьючерсов с Arkham Exchange
+    Args:
+        api_key (str): Ваш API ключ (сохранить в конфиге)
+        api_secret (str): Ваш API секрет (сохранить в конфиге)
+        session (aiohttp.ClientSession): Сессия aiohttp для выполнения запросов
+    Returns:
+        dict: Словарь с данными о цене на споте или фьючерсах
+    """
     def __init__(self, api_key: str = None, api_secret: str = None, session: Optional[aiohttp.ClientSession] = None):
         self.base_url = "https://arkm.com/api"
         self.api_key = api_key
@@ -127,20 +136,3 @@ class ArkhamPrices:
             raise Exception(f"Ошибка получения фьючерсной цены для {coin}: {e}")
 
 
-# =============================================================================
-# ПРИМЕР ИСПОЛЬЗОВАНИЯ
-# =============================================================================
-
-async def main():
-    ARKHAM_API_KEY = '849ac655-bb0e-4584-9ebb-be5d0e5e2ac7'
-    ARKHAM_API_SECRET = 'PM0vJf9okYn8XBcGY/I20GrKkrollqxP2JuBFt6aMq0='
-
-    async with aiohttp.ClientSession() as session:
-        client = ArkhamPrices(ARKHAM_API_KEY, ARKHAM_API_SECRET, session)
-
-        print("=== ПОЛУЧЕНИЕ СПОТ ЦЕНЫ BTC ===")
-        btc_spot = await client.get_futures_price("BTC")
-        data  =  btc_spot.get('mark_price')
-
-if __name__ == "__main__":
-    asyncio.run(main())

@@ -28,26 +28,10 @@ class VolumeCalculate:
         self.arkham_info = arkham_info_client
         
     def calculate_commission_cost(self, volume: float, trading_type: str = 'spot') -> float:
-        """
-        Рассчитывает стоимость комиссии для заданного объема
-        Args:
-            volume: объем торговли
-            trading_type: тип торговли ('spot' или 'futures')
-        Returns:
-            стоимость комиссии в USD
-        """
         fee_rate = config.SPOT_FEE if trading_type == 'spot' else config.FUTURES_FEE
         return volume * fee_rate
     
     def get_current_tier_info(self, volume: float, trading_type: str = 'spot') -> dict:
-        """
-        Определяет текущий уровень для заданного объема
-        Args:
-            volume: текущий объем торговли
-            trading_type: тип торговли ('spot' или 'futures')
-        Returns:
-            информация о текущем уровне
-        """
         tiers = config.SPOT_POINTS_TIERS if trading_type == 'spot' else config.FUTURES_POINTS_TIERS
         
         for tier in tiers:
@@ -58,14 +42,6 @@ class VolumeCalculate:
         return tiers[-1]
     
     def get_next_tier_info(self, volume: float, trading_type: str = 'spot') -> dict:
-        """
-        Определяет следующий уровень для заданного объема
-        Args:
-            volume: текущий объем торговли
-            trading_type: тип торговли ('spot' или 'futures')
-        Returns:
-            информация о следующем уровне или None если уже максимальный
-        """
         tiers = config.SPOT_POINTS_TIERS if trading_type == 'spot' else config.FUTURES_POINTS_TIERS
         
         for i, tier in enumerate(tiers[:-1]):  # исключаем последний уровень
@@ -75,14 +51,6 @@ class VolumeCalculate:
         return None  # Уже на максимальном уровне
     
     def calculate_points_for_volume(self, volume: float, trading_type: str = 'spot') -> int:
-        """
-        Рассчитывает количество очков для заданного объема
-        Args:
-            volume: объем торговли
-            trading_type: тип торговли ('spot' или 'futures')
-        Returns:
-            количество очков Arkham
-        """
         current_tier = self.get_current_tier_info(volume, trading_type)
         
         if 'points_per_100k' in current_tier or 'points_per_200k' in current_tier:
@@ -95,14 +63,6 @@ class VolumeCalculate:
             return current_tier['points']
     
     def calc_max_volume_for_balance(self, trading_type: str = 'spot') -> dict:
-        """
-        Рассчитывает максимальный объем торговли с учетом баланса и комиссий
-        Логика: сначала полностью тратим fee_margin, потом используем остаток баланса
-        Args:
-            trading_type: тип торговли ('spot' или 'futures')
-        Returns:
-            словарь с информацией о максимальном объеме
-        """
         fee_rate = config.SPOT_FEE if trading_type == 'spot' else config.FUTURES_FEE
         
         # Первый этап - полностью тратим маржу на комиссии
@@ -144,13 +104,6 @@ class VolumeCalculate:
         }
     
     def calc_volume_for_next_tier(self, trading_type: str = 'spot') -> dict:
-        """
-        Рассчитывает объем, необходимый для достижения следующего уровня
-        Args:
-            trading_type: тип торговли ('spot' или 'futures')
-        Returns:
-            словарь с информацией о следующем уровне
-        """
         next_tier = self.get_next_tier_info(self.volume_now, trading_type)
         
         if next_tier is None:
@@ -175,11 +128,6 @@ class VolumeCalculate:
         }
     
     def get_optimization_strategy(self) -> dict:
-        """
-        Предлагает оптимальную стратегию торговли для максимизации очков
-        Returns:
-            стратегия с рекомендациями
-        """
         spot_analysis = self.calc_max_volume_for_balance('spot')
         futures_analysis = self.calc_max_volume_for_balance('futures')
         
@@ -200,11 +148,6 @@ class VolumeCalculate:
         }
     
     def calc_volume(self) -> dict:
-        """
-        Основной метод для расчета объема с полным анализом
-        Returns:
-            полная информация о возможном объеме торговли
-        """
         strategy = self.get_optimization_strategy()
         next_tier_spot = self.calc_volume_for_next_tier('spot')
         next_tier_futures = self.calc_volume_for_next_tier('futures')

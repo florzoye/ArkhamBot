@@ -17,16 +17,13 @@ class AsyncSession:
             timeout=aiohttp.ClientTimeout(total=300),
         )
 
-        # Патчим request(), чтобы автоматически подставлялся прокси
         original_request = self.session._request
 
         async def proxy_request(method, url, **kwargs):
             if config.PROXY and "proxy" not in kwargs:
                 kwargs["proxy"] = config.PROXY
             return await original_request(method, url, **kwargs)
-
         self.session._request = proxy_request
-
         return self.session
 
     async def __aexit__(self, exc_type, exc, tb):

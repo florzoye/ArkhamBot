@@ -28,7 +28,7 @@ class ArkhamInfo:
             "accept": "application/json"
         }
 
-        # HMAC-подпись для приватных запросов
+        # HMAC-подпись
         if signed:
             timestamp = str(int(time.time() * 1000))
             payload = f"{timestamp}GET{path}{'?' + query if query else ''}"
@@ -46,10 +46,6 @@ class ArkhamInfo:
             })
 
         return headers
-
-    # ==============================
-    # Баланс и бонусы
-    # ==============================
 
     async def get_balance(self):
         try:
@@ -111,7 +107,7 @@ class ArkhamInfo:
             return None, None
 
     # ==============================
-    # Позиции (фьючерсы)
+    # Позиции по фьючерсам
     # ==============================
 
     async def get_positions(self):

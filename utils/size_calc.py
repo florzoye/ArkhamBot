@@ -1,10 +1,8 @@
-import asyncio
 from data.config import Leverage
 import math
 
 class PositionSizer:
     def __init__(self, balance: float, leverage: int | Leverage, price: float, risk_pct: float):
-        # поддержка Enum и int
         if isinstance(leverage, Leverage):
             leverage = leverage.value
 
@@ -26,15 +24,6 @@ class PositionSizer:
         size = capital_with_leverage / self.price
         size = math.floor(size / self.step) * self.step
         return round(size, 5)
-# 🔹 Пример использования:
-
-async def main():
-    sizer = PositionSizer(balance=98, leverage=25)
-    size = await sizer.calculate_size()
-    print(f"Размер позиции: {size} BTC")
-
-if __name__ == "__main__":
-    asyncio.run(main())
 
 
 
