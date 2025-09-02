@@ -60,16 +60,28 @@ class Leverage(Enum):
 # =========================
 #  Points
 # =========================
-POINTS_GRADE = [
-    {'200': 200000},
-    {'400': 500000},
+SPOT_FEE = 0.001  
+FUTURES_FEE = 0.0005  
+    
+SPOT_POINTS_TIERS = [
+    {'tier': 1, 'volume': 100000, 'points': 200},
+    {'tier': 2, 'volume': 250000, 'points': 500},
+    {'tier': 3, 'volume': 500000, 'points': 1000},
+    {'tier': 4, 'volume': 1000000, 'points': 2000},
+    {'tier': 5, 'volume': 2500000, 'points': 5000},
+    {'tier': 6, 'volume': 5000000, 'points': 10000},
+    {'tier': 7, 'volume': 10000000, 'points': 20000},
+    {'tier': 8, 'volume': float('inf'), 'points_per_100k': 300}
 ]
 
-volume = 501
-
-
-
-for item in POINTS_GRADE:
-    key, value = list(item.items())[0]
-    if int(value) >= volume:
-        print(list((POINTS_GRADE[POINTS_GRADE.index({key: value})-1]).values())[0])
+# Таблица очков для фьючерсов
+FUTURES_POINTS_TIERS = [
+    {'tier': 1, 'volume': 200000, 'points': 200},
+    {'tier': 2, 'volume': 500000, 'points': 500},
+    {'tier': 3, 'volume': 1000000, 'points': 1000},
+    {'tier': 4, 'volume': 2000000, 'points': 2000},
+    {'tier': 5, 'volume': 5000000, 'points': 5000},
+    {'tier': 6, 'volume': 10000000, 'points': 10000},
+    {'tier': 7, 'volume': 20000000, 'points': 20000},
+    {'tier': 8, 'volume': float('inf'), 'points_per_200k': 300}
+]
