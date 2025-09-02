@@ -1,5 +1,6 @@
 # config.py
 from enum import Enum
+from db.manager import AsyncDatabaseManager
 
 # =========================
 #  Пользовательские данные
@@ -19,12 +20,13 @@ PAGE_URL = "https://arkm.com/uk/login?redirectPath=%2Fuk"
 RES_URL = "http://2captcha.com/res.php"
 CREATE_URL = "http://2captcha.com/in.php"
 COOKIE_FILE = "cookies.json"
-
 # =========================
 # 🔧 Пользовательские настройки
 # =========================
 NUMBER_ATTEMPTS_REQUESTS = 10  # сколько раз проверять капчу (по умолчанию 10)
-ENABLE_2FA = True              # включена ли 2FA 
+ENABLE_2FA = True              # включена ли 2FA
+DB_NAME = 'trade.db' 
+TABLE_NAME = "accounts"
 
 # =========================
 #  Enum для плеча

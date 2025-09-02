@@ -1,25 +1,28 @@
 import aiosqlite
-from contextlib import asynccontextmanager
-from .tradeDB import TradeSQL  
-
+from typing import List, Dict
 
 class AsyncDatabaseManager:
     def __init__(self, db_path: str):
         self.db_path = db_path
 
-    @asynccontextmanager
-    async def get_cursor(self):
-        conn = await aiosqlite.connect(self.db_path)
-        try:
+    async def execute(self, query: str, params: Dict = None):
+        async with aiosqlite.connect(self.db_path) as conn:
             cursor = await conn.cursor()
-            yield cursor
+            if params:
+                await cursor.execute(query, params)
+            else:
+                await cursor.execute(query)
             await conn.commit()
-        except Exception as e:
-            await conn.rollback()
-            raise e
-        finally:
-            await conn.close()
 
-    async def get_info_handler(self):
-        async with self.get_cursor() as cursor:
-            return TradeSQL(cursor)
+    async def fetchall(self, query: str, params: Dict = None) -> List[Dict]:
+        async with aiosqlite.connect(self.db_path) as conn:
+            cursor = await conn.cursor()
+            if params:
+                await cursor.execute(query, params)
+            else:
+                await cursor.execute(query)
+            rows = await cursor.fetchall()
+            columns = [col[0] for col in cursor.description]
+            return [dict(zip(columns, row)) for row in rows]
+
+
