@@ -28,7 +28,6 @@ class ArkhamInfo:
             "accept": "application/json"
         }
 
-        # HMAC-подпись
         if signed:
             timestamp = str(int(time.time() * 1000))
             payload = f"{timestamp}GET{path}{'?' + query if query else ''}"
@@ -44,7 +43,6 @@ class ArkhamInfo:
                 "ARK-API-TIMESTAMP": timestamp,
                 "Content-Type": "application/json"
             })
-
         return headers
 
     async def get_balance(self):
@@ -150,7 +148,7 @@ class ArkhamInfo:
 
         for pos in positions:
             base = float(pos.get("base", 0))
-            if base != 0:  # фильтруем только открытые позиции
+            if base != 0:  
                 symbol = pos["symbol"].replace("_USDT_PERP", "")
                 result[symbol] = {
                     "base": base,

@@ -5,8 +5,9 @@ from data import config
 
 class AsyncSession:
     """Контекстный менеджер для aiohttp.ClientSession с преднастройками"""
-    def __init__(self):
+    def __init__(self, proxy: str):
         self.session: aiohttp.ClientSession | None = None
+        self.proxy = proxy 
 
     async def __aenter__(self):
         connector = aiohttp.TCPConnector(ssl=False)
@@ -20,8 +21,8 @@ class AsyncSession:
         original_request = self.session._request
 
         async def proxy_request(method, url, **kwargs):
-            if config.PROXY and "proxy" not in kwargs:
-                kwargs["proxy"] = config.PROXY
+            if self.proxy and "proxy" not in kwargs:
+                kwargs["proxy"] = self.proxy
             return await original_request(method, url, **kwargs)
         self.session._request = proxy_request
         return self.session

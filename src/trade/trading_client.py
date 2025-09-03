@@ -1,7 +1,6 @@
 import aiohttp
 from loguru import logger
 
-from data import config
 from src.account.info import ArkhamInfo
 
 
@@ -16,7 +15,6 @@ class ArkhamTrading:
         price: цена (только для limit ордеров)
         info_client: экземпляр ArkhamInfo для получения данных о позициях
     """
-    
     def __init__(
         self,
         session: aiohttp.ClientSession,
@@ -144,7 +142,6 @@ class ArkhamTrading:
         Если sell_size не указан и есть info_client - автоматически определит баланс монеты
         """
         if sell_size is None and self.info_client:
-            # Автоматически получаем баланс монеты на споте
             spot_balance = await self.info_client.get_spot_balance(self.coin) # метода нет
             if spot_balance <= 0:
                 logger.warning(f"Недостаточный баланс {self.coin} на споте для продажи: {spot_balance}")
@@ -172,7 +169,6 @@ class ArkhamTrading:
             raise ValueError("Цена обязательна для limit ордеров")
             
         if sell_size is None and self.info_client:
-            # Автоматически получаем баланс монеты на споте
             spot_balance = await self.info_client.get_spot_balance(self.coin)
             if spot_balance <= 0:
                 logger.warning(f"Недостаточный баланс {self.coin} на споте для продажи: {spot_balance}")
@@ -259,7 +255,6 @@ class ArkhamTrading:
         if not self.info_client:
             raise ValueError("Для автоматического закрытия нужен info_client")
         
-        # Получаем актуальные позиции
         positions = await self.info_client.get_all_positions()
         
         if self.coin not in positions:
@@ -273,16 +268,13 @@ class ArkhamTrading:
             logger.warning(f"Размер позиции по {self.coin} равен нулю")
             return False
         
-        # Определяем направление закрытия
         if position_size > 0:
-            # Длинная позиция - закрываем продажей
             side = "sell"
             direction = "LONG"
         else:
-            # Короткая позиция - закрываем покупкой  
             side = "buy"
             direction = "SHORT"
-            position_size = abs(position_size)  # делаем положительным
+            position_size = abs(position_size)  
             
         order_data = self._create_order_data(
             side=side,
@@ -299,10 +291,9 @@ class ArkhamTrading:
     async def futures_close_long_market(self, position_size: float = None):
         """Закрытие лонг позиции на фьючерсах по рынку (ручное указание размера)"""
         if position_size is None and self.info_client:
-            # Автоматически получаем размер позиции
             positions = await self.info_client.get_all_positions()
             if self.coin in positions:
-                position_size = max(0, positions[self.coin]["base"])  # только положительные
+                position_size = max(0, positions[self.coin]["base"])  
             else:
                 position_size = float(self.size)
         else:
@@ -326,7 +317,6 @@ class ArkhamTrading:
     async def futures_close_short_market(self, position_size: float = None):
         """Закрытие шорт позиции на фьючерсах по рынку (ручное указание размера)"""
         if position_size is None and self.info_client:
-            # Автоматически получаем размер позиции  
             positions = await self.info_client.get_all_positions()
             if self.coin in positions:
                 position_size = abs(min(0, positions[self.coin]["base"]))  

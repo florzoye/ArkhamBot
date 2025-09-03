@@ -1,4 +1,3 @@
-import asyncio
 import aiohttp
 import time
 import hmac
@@ -29,13 +28,10 @@ class ArkhamPrices:
         if not self.api_key or not self.api_secret:
             raise ValueError("API key и API secret обязательны для аутентификации")
         
-        # Время истечения - текущее время + 5 минут в микросекундах
         expires = str((int(time.time()) + 300) * 1000000)
         
-        # Данные для подписи
         message = f"{self.api_key}{expires}{method}{path}{body}"
         
-        # Создание подписи HMAC-SHA256
         signature = hmac.new(
             base64.b64decode(self.api_secret),
             message.encode('utf-8'),
@@ -62,7 +58,6 @@ class ArkhamPrices:
         if data:
             body = json.dumps(data)
         
-        # Добавление заголовков аутентификации если требуется
         if auth_required:
             expires, signature = self._generate_signature(method, endpoint, body)
             headers.update({

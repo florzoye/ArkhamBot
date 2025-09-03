@@ -14,8 +14,6 @@ console = Console()
 db = AsyncDatabaseManager(config.DB_NAME)
 
 async def main_menu():
-    
-
     while True:
         choice = await inquirer.select(
             message="Выберите действие:",
@@ -86,7 +84,6 @@ async def get_all_acc():
             print(Fore.YELLOW + "📭 Аккаунты не найдены в базе данных")
             return
         
-        # Создаем таблицу с помощью rich
         table = Table(title="[bold blue]📊 Информация об аккаунтах[/bold blue]")
         
         # Добавляем заголовки колонок
@@ -96,19 +93,8 @@ async def get_all_acc():
         table.add_column("Volume", justify="right", style="yellow")
         table.add_column("Margin Fee", justify="right", style="red")
         
-        # Добавляем строки с данными
         for row in data:
-            # Предполагаем, что каждая строка это кортеж или список
-            if isinstance(row, (tuple, list)) and len(row) >= 5:
-                table.add_row(
-                    str(row[0]),  # account
-                    str(row[1]),  # balance
-                    str(row[2]),  # points
-                    str(row[3]),  # volume
-                    str(row[4])   # margin_fee
-                )
-            elif isinstance(row, dict):
-                # Если данные в виде словаря
+            if isinstance(row, dict):
                 table.add_row(
                     str(row.get('account', 'N/A')),
                     str(row.get('balance', 'N/A')),
@@ -117,7 +103,6 @@ async def get_all_acc():
                     str(row.get('margin_fee', 'N/A'))
                 )
             else:
-                # Базовый вывод для неожиданных форматов
                 table.add_row(*[str(item) for item in row])
         
         console.print(table)
@@ -132,32 +117,19 @@ async def run_strategy(db: AsyncDatabaseManager):
     print(Fore.GREEN + "Стратегия завершена.")
 
 
-if __name__ == "__main__":
-    asyncio.run(main_menu())
+# if __name__ == "__main__":
+#     asyncio.run(main_menu())
 
 
-import asyncio
-from db.manager import AsyncDatabaseManager
-from db.tradeDB import TradeSQL
+# import asyncio
+# from db.manager import AsyncDatabaseManager
+# from db.tradeDB import TradeSQL
 
-async def main():
-    db = AsyncDatabaseManager("trade.db")
-    trade = TradeSQL(db)
+# async def main():
+#     db = AsyncDatabaseManager("trade.db")
+#     trade = TradeSQL(db)
+#     await trade.c("accounts")
 
-    await trade.create_table("accounts")
+#     await trade.clear_table("accounts")
 
-    await trade.add_info("accounts", {
-        "account": "user1",
-        "balance": 1000.0,
-        "points": 50,
-        "volume": 500.0,
-        "margin_fee": 100
-    })
-
-    all_data = await trade.get_all("accounts")
-    print(all_data)
-
-    # Очистка таблицы
-    # await trade.clear_table("accounts")
-
-asyncio.run(main())
+# asyncio.run(main())

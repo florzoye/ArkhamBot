@@ -48,9 +48,7 @@ class ArkhamLeverage:
                     text = await response.text()
                     print(f"⚠️ Не удалось распарсить JSON, ответ сервера:\n{text}")
 
-            # После установки проверяем плечо
             await self.check_leverage(symbol, leverage=leverage)
-
 
     async def check_leverage(self, symbol: str, leverage: str | int|  None = None):
         """Проверить текущее кредитное плечо для заданного символа"""

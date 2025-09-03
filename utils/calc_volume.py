@@ -38,23 +38,21 @@ class VolumeCalculate:
             if volume <= tier['volume']:
                 return tier
         
-        # Для 8-го уровня (> 10M для спота или > 20M для фьючерсов)
         return tiers[-1]
     
     def get_next_tier_info(self, volume: float, trading_type: str = 'spot') -> dict:
         tiers = config.SPOT_POINTS_TIERS if trading_type == 'spot' else config.FUTURES_POINTS_TIERS
         
-        for i, tier in enumerate(tiers[:-1]):  # исключаем последний уровень
+        for i, tier in enumerate(tiers[:-1]):  
             if volume < tier['volume']:
                 return tier
         
-        return None  # Уже на максимальном уровне
+        return None  
     
     def calculate_points_for_volume(self, volume: float, trading_type: str = 'spot') -> int:
         current_tier = self.get_current_tier_info(volume, trading_type)
         
         if 'points_per_100k' in current_tier or 'points_per_200k' in current_tier:
-            # 8-й уровень - расчет по формуле
             if trading_type == 'spot':
                 return int((volume / 100000) * 300)
             else:
@@ -65,26 +63,21 @@ class VolumeCalculate:
     def calc_max_volume_for_balance(self, trading_type: str = 'spot') -> dict:
         fee_rate = config.SPOT_FEE if trading_type == 'spot' else config.FUTURES_FEE
         
-        # Первый этап - полностью тратим маржу на комиссии
         volume_from_margin = self.fee_margin / fee_rate
         commission_from_margin = self.fee_margin
         
-        # Второй этап - используем остаток баланса после вычета remaining_balance
         remaining_balance_after_margin = self.balance - self.remaining_balance
         
         if remaining_balance_after_margin <= 0:
-            # Используем только маржу на комиссии
             total_volume = volume_from_margin
             total_commission = commission_from_margin
         else:
-            # Добавляем объем за счет оставшегося баланса
             volume_from_balance = remaining_balance_after_margin / fee_rate
             commission_from_balance = remaining_balance_after_margin
             
             total_volume = volume_from_margin + volume_from_balance
             total_commission = commission_from_margin + commission_from_balance
         
-        # Добавляем к текущему объему
         final_volume = self.volume_now + total_volume
         
         points_earned = self.calculate_points_for_volume(final_volume, trading_type)
@@ -131,11 +124,9 @@ class VolumeCalculate:
         spot_analysis = self.calc_max_volume_for_balance('spot')
         futures_analysis = self.calc_max_volume_for_balance('futures')
         
-        # Сравниваем эффективность по очкам на доллар комиссии
         spot_efficiency = spot_analysis['points_earned'] / spot_analysis['commission_cost'] if spot_analysis['commission_cost'] > 0 else 0
         futures_efficiency = futures_analysis['points_earned'] / futures_analysis['commission_cost'] if futures_analysis['commission_cost'] > 0 else 0
         
-        # Определяем, какой тип торговли даст больше очков
         recommended_type = 'futures' if futures_analysis['points_earned'] > spot_analysis['points_earned'] else 'spot'
         
         return {
@@ -162,14 +153,3 @@ class VolumeCalculate:
         }
 
 
-# Пример использования:
-# calculator = VolumeCalculate(
-#     volume_now=0,  # Текущий объем
-#     fee_margin=200,      # Маржа на комиссии
-#     balance=100,       # Текущий баланс
-#     remaining_balance=50,  # Остаток, который нужно сохранить
-
-# )
-
-# result = calculator.calc_volume()
-# print(result['optimization_strategy']['futures_analysis'])
