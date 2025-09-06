@@ -2,8 +2,7 @@ import time
 import json
 from yarl import URL
 
-from utils.session import AsyncSession
-
+import aiohttp
 
 async def check_cookies_from_db(db_manager, table_name: str, account: str) -> bool:
     try:
@@ -49,21 +48,14 @@ async def apply_cookies_from_db(session, db_manager, table_name: str, account: s
         return False
 
 
-async def save_cookies_to_db(session: AsyncSession, db_manager, table_name: str, account: str, url: str = "https://arkm.com"):
+async def save_cookies_to_account(session: aiohttp.ClientSession , account_client, url: str = "https://arkm.com"):
     """Сохранить куки текущей сессии в БД"""
     try:
         cookies = session.cookie_jar.filter_cookies(URL(url))
         dict_cookies = {key: cookie.value for key, cookie in cookies.items()}
-        dict_cookies["created_at"] = int(time.time())
-        
-        cookies_json = json.dumps(dict_cookies, ensure_ascii=False)
-        
-        await db_manager.execute(
-            f"UPDATE {table_name} SET cookies = :cookies WHERE account = :account",
-            {"account": account, "cookies": cookies_json}
-        )
-        return dict_cookies
-    
+        dict_cookies["created_at"] = int(time.time())   
+        account_client.cookies = dict_cookies
+        return account_client
     except Exception as e:
         print(f"Ошибка сохранения cookies в БД: {e}")
         return None

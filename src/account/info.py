@@ -1,18 +1,14 @@
 import aiohttp
 from loguru import logger
-import json
 import hmac
 import hashlib
 import time
 
-from data import config
-
-
 class ArkhamInfo:
-    def __init__(self, session: aiohttp.ClientSession, subaccount_id: int = 0):
+    def __init__(self, session: aiohttp.ClientSession,  api_key: str,  api_secret: str, subaccount_id: int = 0):
         self.session = session
-        self.api_key = config.ARKHAM_API_KEY
-        self.api_secret = config.ARKHAM_API_SECRET
+        self.api_key = api_key
+        self.api_secret = api_secret
         self.subaccount_id = subaccount_id
 
     def headers(self, action: str = None, signed: bool = False, path: str = "", query: str = "") -> dict:
@@ -103,10 +99,6 @@ class ArkhamInfo:
         except Exception as e:
             logger.error(f"Ошибка при получении маржинальных бонусов: {e}")
             return None, None
-
-    # ==============================
-    # Позиции по фьючерсам
-    # ==============================
 
     async def get_positions(self):
         """Фьючерсные позиции"""

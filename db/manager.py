@@ -13,10 +13,17 @@ class AsyncDatabaseManager:
             self._conn.row_factory = aiosqlite.Row  
 
     async def close(self):
-        """Закрыть соединение"""
-        if self._conn is not None:
-            await self._conn.close()
-            self._conn = None
+        """Закрыть соединение с базой данных"""
+        try:
+            if hasattr(self, 'connection') and self.connection:
+                await self.connection.close()
+                print("[green]✅ Соединение с БД закрыто[/green]")
+            elif hasattr(self, 'pool') and self.pool:
+                # Если используете connection pool
+                await self.pool.close()
+                print("[green]✅ Connection pool закрыт[/green]")
+        except Exception as e:
+            print(f"[yellow]⚠️ Ошибка при закрытии БД: {e}[/yellow]")
 
     async def execute(self, query: str, params: Dict = None):
         await self.connect()

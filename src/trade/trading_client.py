@@ -1,8 +1,6 @@
 import aiohttp
 from loguru import logger
-
 from src.account.info import ArkhamInfo
-
 
 class ArkhamTrading:
     """

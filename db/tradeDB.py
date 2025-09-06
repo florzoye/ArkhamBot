@@ -9,7 +9,6 @@ from db.schemas import (
     get_select_all_sql,
     get_clear_table_sql,
     get_select_by_account_sql,
-    get_select_by_user_sql
 )
 from utils.cookies import check_cookies_from_db
 
@@ -47,14 +46,6 @@ class TradeSQL:
         except Exception as e:
             logger.error(f"Ошибка очистки таблицы '{table_name}': {e}")
             raise
-
-    async def get_accounts_by_user(self, table_name: str, user_id: int) -> List[Dict]:
-        """Вернуть все аккаунты, которые привязаны к user_id"""
-        try:
-            return await self.db.fetchall(get_select_by_user_sql(table_name), {"user_id": user_id})
-        except Exception as e:
-            logger.error(f"Ошибка получения аккаунтов для пользователя {user_id}: {e}")
-            return []
 
     async def get_account(self, table_name: str, account: str) -> Dict | None:
         """Получить конкретный аккаунт"""
@@ -131,6 +122,26 @@ class TradeSQL:
             logger.success(f"Email/password для аккаунта '{account}' обновлены")
         except Exception as e:
             logger.error(f"Ошибка обновления email/password для аккаунта '{account}': {e}")
+            raise
+    
+    async def update_balance_fee_volume_points(
+            self,
+            table_name: str,
+            account: str,
+            balance: str,
+            volume: str,
+            points: str,
+            fee: str,
+            bonus: str
+        ):
+        try:
+            await self.db.execute(
+                f"UPDATE {table_name} SET balance = :balance, volume = :volume, points = :points, margin_fee = :margin_fee, margin_bonus =:margin_bonus WHERE account = :account",
+                {"account": account, "balance": balance, "volume": volume, "points": points, "margin_fee": fee, "margin_bonus": bonus}
+            )
+            logger.success(f"Balance/volume/points/fee для аккаунта '{account}' обновлены")
+        except Exception as e:
+            logger.error(f"Ошибка обновления Balance/volume/points/fee/bonus для аккаунта '{account}': {e}")
             raise
 
     async def check_cookies_valid(self, table_name: str, account: str) -> bool:

@@ -1,6 +1,4 @@
-# config.py
 from enum import Enum
-from db.manager import AsyncDatabaseManager
 
 # =========================
 #  Пользовательские данные
