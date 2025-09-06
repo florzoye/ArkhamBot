@@ -34,6 +34,23 @@ db: Optional[AsyncDatabaseManager] = None
 _shutdown_in_progress = False
 
 
+
+def _normalize_proxy(raw: str) -> Optional[str]:
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+
+    if '@' in raw:
+        return raw
+
+    parts = raw.split()
+    if len(parts) == 2 and parts[0].startswith('http'):
+        return f"{parts[0]}@{parts[1]}"
+
+    if len(parts) == 2:
+        return f"http://{parts[0]}@{parts[1]}"
+    return raw 
+
 async def graceful_shutdown():
     global _shutdown_in_progress, db, current_account
     
@@ -119,7 +136,7 @@ def setup_interrupt_handler():
     signal.signal(signal.SIGINT, signal_handler)   
     signal.signal(signal.SIGTERM, signal_handler)  
     
-    if hasattr(signal, 'SIGBREAK'):  # Windows
+    if hasattr(signal, 'SIGBREAK'):  
         signal.signal(signal.SIGBREAK, signal_handler)
 
 
@@ -127,6 +144,7 @@ async def start_menu() -> Optional[Account]:
     """Меню выбора или добавления аккаунта"""
     while not shutdown_event.is_set():
         try:
+            console.print(config.banner, justify="center")
             console.print("Для начала нужно выбрать или добавить аккаунт в базу данных", justify="center")
                 
             choice = await inquirer.select(
@@ -229,7 +247,7 @@ async def analytics_menu(account: Account):
         console.print("[blue]📊 Загрузка информации об аккаунте...[/blue]")
         
         if not account.arkham_info:
-            await account.initialize_clients(db)
+            await account.initialize_clients()
         
         balance = await account.arkham_info.get_balance()
         points = await account.arkham_info.get_volume_or_points('points')
@@ -302,10 +320,14 @@ async def add_account() -> Optional[Account]:
         account_name = await inquirer.text(message="Введите название аккаунта:").execute_async()
         email = await inquirer.text(message="Введите email:").execute_async()
         password = await inquirer.text(message="Введите пароль:").execute_async()
-        proxy = await inquirer.text(message="Введите прокси (необязательно):").execute_async()
+        raw_proxy = await inquirer.text(
+            message="Введите прокси (например: http://user:pass ip:port или http://user:pass@ip:port):"
+        ).execute_async()
+        proxy = _normalize_proxy(str(raw_proxy))
         api_key = await inquirer.text(message="Введите Arkham api_key:").execute_async()
         api_secret = await inquirer.text(message="Введите Arkham api_secret:").execute_async()
         captcha_key = await inquirer.text(message="Введите TwoCaptcha captcha_key:").execute_async()
+        
         account = Account(
             account=account_name,
             email=email,
@@ -349,7 +371,7 @@ async def add_account() -> Optional[Account]:
             return None
                 
         # Инициализируем клиентов
-        await account.initialize_clients(db)
+        await account.initialize_clients()
         
         if shutdown_event.is_set():
             await account.close_session()
@@ -475,7 +497,9 @@ async def login_arkham(account: Account) -> Optional[Account]:
 
     except Exception as e:
         if not shutdown_event.is_set():
-            console.print(f"[red]❌ Произошла ошибка во время login'a: {e}[/red]")
+            import traceback
+            console.print(f"[red]❌ Ошибка login: {repr(e)}[/red]")
+            console.print(traceback.format_exc())
         return None
 
 

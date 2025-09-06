@@ -47,7 +47,6 @@ class Account(BaseModel):
                 await self.session.close()
                 await asyncio.sleep(0.1)
             
-            # Получаем сессию через менеджер
             self.session = await self._session_manager.get_session(self.proxy)
             return self.session
             
@@ -85,6 +84,37 @@ class Account(BaseModel):
         except Exception as e:
             console.print(f'[red]❌ Ошибка проверки сессии: {e}[/red]')
             return False
+    
+    async def initialize_clients(self):
+        """Инициализировать все клиенты Arkham для работы с аккаунтом"""
+        try:
+            session = await self.ensure_session()
+
+            # Клиент для получения цен
+            if not self.price_client:
+                self.price_client = ArkhamPrices(
+                    api_key=self.api_key,
+                    api_secret=self.api_secret,
+                    session=session
+                )
+
+                self.arkham_login = ArkhamLogin(
+                    session=session,
+                    password=self.password,
+                    email=self.email,
+                )
+
+            if not self.arkham_info:
+                self.arkham_info = ArkhamInfo(
+                    session=session,
+                    api_key=self.api_key,
+                    api_secret=self.api_secret,
+                )
+            console.print(f"[green]✅ Клиенты для аккаунта '{self.account}' инициализированы[/green]")
+        except Exception as e:
+            console.print(f"[red]❌ Ошибка инициализации клиентов: {e}[/red]")
+            raise
+
 
     async def __aenter__(self):
         """Контекстный менеджер - вход"""
