@@ -26,6 +26,20 @@ async def check_cookies_from_db(db_manager, table_name: str, account: str) -> bo
         print("ERR in check_cookies_from_db:", type(e), e)
         return False
 
+async def check_cookies_from_account(account) -> bool:
+    try:
+        cookies_data = account.cookies
+        created_at = cookies_data.get("created_at")
+
+        if not created_at:
+            return False  
+        
+        age = int(time.time()) - int(created_at)
+        return age < 1800
+    except Exception as e:
+        print("ERR in check_cookies_from_db:", type(e), e)
+        return False
+
 async def apply_cookies_from_db(session, db_manager, table_name: str, account: str, url: str = "https://arkm.com") -> bool:
     """Загрузить куки из БД и добавить их в aiohttp.ClientSession"""
     try:

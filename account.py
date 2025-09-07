@@ -20,14 +20,18 @@ class Account(BaseModel):
     email: str
     account: str
     password: str
-    captcha_key: Optional[str] = None
+    balance: Optional[float] = None
+    volume: Optional[float] = None
+    points: Optional[int] = None
+    margin_fee: Optional[float] = None
+    margin_bonus: Optional[float] = None
     proxy: Optional[str] = None
     api_key: Optional[str] = None
     cookies: Optional[dict] = None
     api_secret: Optional[str] = None
+    captcha_key: Optional[str] = None
     arkham_info: Optional[ArkhamInfo] = None
-    arkham_login: Optional[ArkhamLogin] = None
-    price_client: Optional[ArkhamPrices] = None 
+    arkham_price: Optional[ArkhamPrices] = None 
     arkham_trader: Optional[ArkhamTrading] = None
     session: Optional[aiohttp.ClientSession] = None
     _session_manager: Optional[GlobalSessionManager] = None
@@ -90,20 +94,13 @@ class Account(BaseModel):
         try:
             session = await self.ensure_session()
 
-            # Клиент для получения цен
-            if not self.price_client:
-                self.price_client = ArkhamPrices(
+            if not self.arkham_price:
+                self.arkham_price = ArkhamPrices(
                     api_key=self.api_key,
                     api_secret=self.api_secret,
                     session=session
                 )
-
-                self.arkham_login = ArkhamLogin(
-                    session=session,
-                    password=self.password,
-                    email=self.email,
-                )
-
+                
             if not self.arkham_info:
                 self.arkham_info = ArkhamInfo(
                     session=session,
@@ -114,6 +111,38 @@ class Account(BaseModel):
         except Exception as e:
             console.print(f"[red]❌ Ошибка инициализации клиентов: {e}[/red]")
             raise
+        
+    async def update_data(self, ):
+        """
+        Обновление данных аккаунта.
+        Если login=True:
+            - выполняется логин
+            - обновляются куки и сессия
+            - обновляются все данные аккаунта
+        Если login=False:
+            - просто обновляются основные данные (balance, volume, points, fee, bonus)
+            - куки и сессия НЕ трогаются
+        """
+        try:
+            await self.initialize_clients()
+
+            balance = (await self.arkham_info.get_balance())
+            points = (await self.arkham_info.get_volume_or_points('points'))
+            volume = (await self.arkham_info.get_volume_or_points('volume'))
+            bonus, fee = await self.arkham_info.get_fee_margin()
+
+            self.balance = balance
+            self.volume = volume
+            self.points = points
+            self.margin_fee = fee
+            self.margin_bonus = bonus
+
+            console.print(f"[green]✅ Данные аккаунта '{self.account}' обновлены[/green]")
+            return True
+
+        except Exception as e:
+            console.print(f"[red]❌ Ошибка обновления данных аккаунта '{self.account}': {e}[/red]")
+            return False
 
 
     async def __aenter__(self):

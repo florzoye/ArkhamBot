@@ -6,35 +6,43 @@ import asyncio
 from typing import Optional
 
 from colorama import init
+from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from InquirerPy import inquirer
-from rich.console import Console
 
 from db.tradeDB import TradeSQL
-from utils.captcha import TwoCaptcha
-from utils.session import session_manager 
 from db.manager import AsyncDatabaseManager
-from utils.cookies import save_cookies_to_account
+
+from utils.session import session_manager
+from utils.cookies import (
+    save_cookies_to_account,
+    check_cookies_from_db,
+    check_cookies_from_account,
+    apply_cookies_from_db
+)
+from utils.captcha import TwoCaptcha
 
 from src.account.info import ArkhamInfo
 from src.account.login import ArkhamLogin
 from src.trade.trading_client import ArkhamTrading
 
-
 from account import Account
 from data import config
 
+
+# --- Инициализация окружения ---
 init(autoreset=True)
 console = Console()
 
+# --- Глобальные переменные ---
 current_account: Optional[Account] = None
 shutdown_event = asyncio.Event()
 db: Optional[AsyncDatabaseManager] = None
 _shutdown_in_progress = False
 
 
-
+# --- Вспомогательные функции ---
 def _normalize_proxy(raw: str) -> Optional[str]:
     raw = (raw or '').strip()
     if not raw:
@@ -49,16 +57,39 @@ def _normalize_proxy(raw: str) -> Optional[str]:
 
     if len(parts) == 2:
         return f"http://{parts[0]}@{parts[1]}"
-    return raw 
 
+    return raw
+
+
+def db_row_to_account(row: dict) -> Account:
+    """Преобразовать строку из БД в объект Account"""
+    cookies = row.get("cookies")
+    if cookies and isinstance(cookies, str):
+        try:
+            cookies = json.loads(cookies)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return Account(
+        account=row.get("account"),
+        email=row.get("email"),
+        password=row.get("password"),
+        api_key=row.get("api_key"),
+        api_secret=row.get("api_secret"),
+        proxy=row.get("proxy"),
+        cookies=cookies,
+        captcha_key=row.get("captcha_key")
+    )
+
+
+# --- Завершение работы и обработчики ---
 async def graceful_shutdown():
     global _shutdown_in_progress, db, current_account
-    
+
     if _shutdown_in_progress:
         return
-    
     _shutdown_in_progress = True
-    
+
     console.print("\n[yellow]🔄 Завершение работы программы...[/yellow]")
     shutdown_event.set()
 
@@ -102,10 +133,10 @@ async def graceful_shutdown():
                 console.print("[yellow]⚠️ Некоторые задачи не завершились по таймауту[/yellow]")
 
         console.print("[green]✅ Программа корректно завершена[/green]")
-        
+
     except Exception as e:
         console.print(f"[red]❌ Ошибка при завершении: {e}[/red]")
-    
+
     finally:
         try:
             loop = asyncio.get_running_loop()
@@ -119,7 +150,7 @@ def setup_interrupt_handler():
     """Настройка обработчика прерывания"""
     def signal_handler(sig, frame):
         console.print(f"\n[yellow]⚠️ Получен сигнал {sig}, завершение программы...[/yellow]")
-        
+
         if _shutdown_in_progress:
             console.print("[red]⚠️ Принудительное завершение...[/red]")
             os._exit(1)
@@ -132,21 +163,22 @@ def setup_interrupt_handler():
                 os._exit(0)
         except RuntimeError:
             os._exit(0)
-    
-    signal.signal(signal.SIGINT, signal_handler)   
-    signal.signal(signal.SIGTERM, signal_handler)  
-    
-    if hasattr(signal, 'SIGBREAK'):  
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    if hasattr(signal, 'SIGBREAK'):
         signal.signal(signal.SIGBREAK, signal_handler)
 
 
+# --- Меню ---
 async def start_menu() -> Optional[Account]:
     """Меню выбора или добавления аккаунта"""
     while not shutdown_event.is_set():
         try:
             console.print(config.banner, justify="center")
             console.print("Для начала нужно выбрать или добавить аккаунт в базу данных", justify="center")
-                
+
             choice = await inquirer.select(
                 message='Выберите действие',
                 choices=[
@@ -168,7 +200,7 @@ async def start_menu() -> Optional[Account]:
                         return acc
                 case "❌ Выход":
                     return None
-                    
+
         except KeyboardInterrupt:
             return None
         except Exception as e:
@@ -184,7 +216,7 @@ async def main_menu(account: Account):
     """Главное меню с основной функциональностью"""
     global current_account
     current_account = account
-    
+
     while not shutdown_event.is_set():
         try:
             console.print(
@@ -196,7 +228,7 @@ async def main_menu(account: Account):
                 message="Выберите действие:",
                 choices=[
                     "📂 Управление базой данных",
-                    "🔐 Аутентификация и аккаунты", 
+                    "🔐 Обновить данные аккаунта",
                     "💹 Торговые операции",
                     "📊 Информация и аналитика",
                     "⚙️ Настройки и конфигурация",
@@ -208,7 +240,7 @@ async def main_menu(account: Account):
             match choice:
                 case "📂 Управление базой данных":
                     await database_menu(account)
-                case "🔐 Аутентификация и аккаунты":
+                case "🔐 Обновить данные аккаунта":
                     await auth_menu(account)
                 case "💹 Торговые операции":
                     await trading_menu(account)
@@ -218,7 +250,7 @@ async def main_menu(account: Account):
                     await settings_menu(account)
                 case "❌ Выход":
                     return
-                    
+
         except KeyboardInterrupt:
             return
         except Exception as e:
@@ -228,6 +260,7 @@ async def main_menu(account: Account):
             await asyncio.sleep(1)
 
 
+# --- Подменю ---
 async def database_menu(account: Account):
     console.print("[yellow]📂 Меню управления базой данных (в разработке)[/yellow]")
     await asyncio.sleep(1)
@@ -242,45 +275,42 @@ async def trading_menu(account: Account):
 
 async def analytics_menu(account: Account):
     """Простое меню аналитики"""
-        
     try:
         console.print("[blue]📊 Загрузка информации об аккаунте...[/blue]")
-        
+
         if not account.arkham_info:
             await account.initialize_clients()
-        
+
         balance = await account.arkham_info.get_balance()
         points = await account.arkham_info.get_volume_or_points('points')
         volume = await account.arkham_info.get_volume_or_points('volume')
-        
+
         if shutdown_event.is_set():
             return
-        
+
         table = Table(title=f"📊 Информация об аккаунте: {account.account}")
         table.add_column("Параметр", style="cyan")
         table.add_column("Значение", style="green")
-        
+
         table.add_row("💰 Баланс", str(balance))
         table.add_row("🏆 Очки", str(points))
         table.add_row("📈 Объем торгов", str(volume))
-        
+
         console.print(table)
-        
+
         if not shutdown_event.is_set():
             await inquirer.text(message="Нажмите Enter для возврата в меню...").execute_async()
-        
+
     except Exception as e:
         if not shutdown_event.is_set():
             console.print(f"[red]❌ Ошибка получения аналитики: {e}[/red]")
             await asyncio.sleep(2)
 
 async def settings_menu(account: Account):
-    if shutdown_event.is_set():
-        return
     console.print("[yellow]⚙️ Меню настроек (в разработке)[/yellow]")
     await asyncio.sleep(1)
 
-
+# --- Работа с аккаунтами и БД ---
 async def select_account() -> Optional[Account]:
     """Выбор аккаунта из базы данных"""
     try:
@@ -291,21 +321,77 @@ async def select_account() -> Optional[Account]:
             console.print("[red]❌ Нет аккаунтов в базе данных[/red]")
             return None
 
-        account_names = [acc.get('account', 'Unknown') for acc in accounts]
+        account_names = [acc.get("account", "Unknown") for acc in accounts]
         selected_name = await inquirer.select(
             message="Выберите аккаунт:",
             choices=account_names + ["❌ Отмена"]
         ).execute_async()
-        
+
         if selected_name == "❌ Отмена" or shutdown_event.is_set():
             return None
 
         acc_data = await trade_table.get_account(config.TABLE_NAME, selected_name)
         account = db_row_to_account(acc_data)
-        
-        # Инициализируем сессию
+
         await account.create_session()
+
+        # Загружаем куки из БД и устанавливаем их в сессию
+        cookies_loaded = await apply_cookies_from_db(account.session, db, config.TABLE_NAME, account.account)
         
+        if cookies_loaded:
+            console.print("[green]✅ Куки загружены из БД в сессию[/green]")
+            
+            # Загружаем куки в объект account для проверки валидности
+            cookies_from_db = await trade_table.get_cookies(config.TABLE_NAME, account.account)
+            if cookies_from_db:
+                account.cookies = cookies_from_db
+            
+            # Проверяем валидность уже установленных куки
+            cookies_valid = await check_cookies_from_account(account)
+            
+            if cookies_valid:
+                console.print("[green]✅ Куки валидны, обновляем данные аккаунта[/green]")
+                await account.update_data()
+                
+                await trade_table.update_account_data(
+                    config.TABLE_NAME,
+                    account.account,
+                    account.balance,
+                    account.volume,
+                    account.points,
+                    account.margin_fee,
+                    account.margin_bonus,
+                    cookies=None  
+                )
+                return account
+            else:
+                console.print("[yellow]⚠️ Куки не валидны (старше 30 минут), требуется повторный логин[/yellow]")
+        else:
+            console.print("[yellow]⚠️ Куки в БД не найдены[/yellow]")
+
+        # Если куки не найдены или не валидны - логинимся заново
+        console.print("[blue]🔐 Выполняется повторная авторизация...[/blue]")
+        account = await login_arkham(account)
+        
+        if not account or shutdown_event.is_set():
+            console.print("[red]❌ Авторизация не удалась[/red]")
+            return None
+            
+        await account.update_data()
+        
+        # Сохраняем новые куки
+        await save_cookies_to_account(account.session, account)
+        await trade_table.update_account_data(
+            config.TABLE_NAME,
+            account.account,
+            account.balance,
+            account.volume,
+            account.points,
+            account.margin_fee,
+            account.margin_bonus,
+            account.cookies
+        ) 
+
         return account
 
     except Exception as e:
@@ -377,11 +463,10 @@ async def add_account() -> Optional[Account]:
             await account.close_session()
             return None
         
-        balance = await account.arkham_info.get_balance()
-        points = await account.arkham_info.get_volume_or_points('points')
-        volume = await account.arkham_info.get_volume_or_points('volume')
-        margin_fee = list(await account.arkham_info.get_fee_margin())[1]
-        margin_bonus = list(await account.arkham_info.get_fee_margin())[0]
+        balance = float(await account.arkham_info.get_balance())
+        points = int(await account.arkham_info.get_volume_or_points('points'))
+        volume = float(await account.arkham_info.get_volume_or_points('volume'))
+        margin_bonus, margin_fee = await account.arkham_info.get_fee_margin()
 
         if shutdown_event.is_set():
             await account.close_session()
@@ -397,7 +482,14 @@ async def add_account() -> Optional[Account]:
         return None
 
 
-async def save_account_to_db(account: Account, balance, points, volume, margin_fee, margin_bonus):
+async def save_account_to_db(
+        account: Account,
+        points: Optional[int] | None = None,
+        volume: Optional[float] | None = None,
+        balance: Optional[float] | None = None,
+        margin_fee: Optional[float] | None = None,
+        margin_bonus: Optional[float] | None = None
+    ):
     """Сохранить аккаунт в базу данных"""
     if shutdown_event.is_set():
         return
@@ -405,7 +497,7 @@ async def save_account_to_db(account: Account, balance, points, volume, margin_f
     try:
         trade_table = TradeSQL(db)
         account_data = account.model_dump(
-            exclude={"arkham_info", "arkham_login", "price_client", "arkham_trader", "session", "_session_manager"}
+            exclude={"arkham_info", "arkham_login", "arkam_price", "arkham_trader", "session", "_session_manager"}
         )
         
         if account_data.get('cookies'):
@@ -438,27 +530,6 @@ async def save_account_to_db(account: Account, balance, points, volume, margin_f
     except Exception as e:
         if not shutdown_event.is_set():
             console.print(f"[red]❌ Ошибка сохранения аккаунта в БД: {e}[/red]")
-
-
-def db_row_to_account(row: dict) -> Account:
-    """Преобразовать строку из БД в объект Account"""
-    cookies = row.get("cookies")
-    if cookies and isinstance(cookies, str):
-        try:
-            cookies = json.loads(cookies)
-        except (json.JSONDecodeError, TypeError):
-            pass
-    
-    return Account(
-        account=row.get("account"),
-        email=row.get("email"),
-        password=row.get("password"),
-        api_key=row.get("api_key"),
-        api_secret=row.get("api_secret"),
-        proxy=row.get("proxy"),
-        cookies=cookies,
-        captcha_key=row.get("captcha_key")
-    )
 
 
 async def login_arkham(account: Account) -> Optional[Account]:
@@ -503,6 +574,7 @@ async def login_arkham(account: Account) -> Optional[Account]:
         return None
 
 
+    
 async def create_table():
     """Создание таблицы если её нет"""
     try:
@@ -513,10 +585,10 @@ async def create_table():
         if not shutdown_event.is_set():
             console.print(f"[red]❌ Ошибка создания таблицы: {e}[/red]")
 
-
+# --- Main ---
 async def main():
     """Главная функция программы с улучшенной обработкой завершения"""
-    global db # да, это пиздец
+    global db 
     try:
         setup_interrupt_handler()
         

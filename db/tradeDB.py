@@ -124,25 +124,45 @@ class TradeSQL:
             logger.error(f"Ошибка обновления email/password для аккаунта '{account}': {e}")
             raise
     
-    async def update_balance_fee_volume_points(
+    async def update_account_data(
             self,
             table_name: str,
             account: str,
-            balance: str,
-            volume: str,
-            points: str,
-            fee: str,
-            bonus: str
+            balance: str | None,
+            volume: str | None,
+            points: str | None,
+            fee: str | None,
+            bonus: str | None,
+            cookies: dict | None,
         ):
-        try:
-            await self.db.execute(
-                f"UPDATE {table_name} SET balance = :balance, volume = :volume, points = :points, margin_fee = :margin_fee, margin_bonus =:margin_bonus WHERE account = :account",
-                {"account": account, "balance": balance, "volume": volume, "points": points, "margin_fee": fee, "margin_bonus": bonus}
-            )
-            logger.success(f"Balance/volume/points/fee для аккаунта '{account}' обновлены")
-        except Exception as e:
-            logger.error(f"Ошибка обновления Balance/volume/points/fee/bonus для аккаунта '{account}': {e}")
-            raise
+            try:
+                cookies_json = json.dumps(cookies, ensure_ascii=False) if cookies else None
+
+                await self.db.execute(
+                    f"""
+                    UPDATE {table_name}
+                    SET balance = :balance,
+                        volume = :volume,
+                        points = :points,
+                        margin_fee = :margin_fee,
+                        margin_bonus = :margin_bonus,
+                        cookies = COALESCE(:cookies, cookies)
+                    WHERE account = :account
+                    """,
+                    {
+                        "account": account,
+                        "balance": balance or "0",
+                        "volume": volume or "0",
+                        "points": points or "0",
+                        "margin_fee": fee or "0",
+                        "margin_bonus": bonus or "0",
+                        "cookies": cookies_json,
+                    }
+                )
+                logger.success(f"✅ Данные аккаунта '{account}' обновлены")
+            except Exception as e:
+                logger.error(f"Ошибка обновления данных аккаунта '{account}': {e}")
+                raise
 
     async def check_cookies_valid(self, table_name: str, account: str) -> bool:
         """Проверить валидность куков для аккаунта"""
