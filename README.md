@@ -19,14 +19,14 @@
 - ✅ Внести депозит 
 - ✅ Заберите награды в разделе [Rewards](https://arkm.com/rewards) 
 
-### 2. API Keys (обязательно)
+### 2. API Keys 
 1. Перейдите на [Arkham Settings](https://arkm.com/settings/api-keys)
 2. Создайте новый API ключ
 3. Сохраните:
    - `API Key`
    - `Secret Key`
 
-### 3. TwoCaptcha (обязательно)
+### 3. TwoCaptcha 
 1. Регистрация на [2captcha.com](https://2captcha.com/)
 2. Пополните баланс 
 3. Получите `API Key`
