@@ -19,7 +19,7 @@ class ArkhamLogin:
     @staticmethod
     async def input_2fa():
         msg = " 🔑 Введите 2FA код: "
-        border = "=" * 33  # ширина рамки
+        border = "=" * 33 
         print("\n" + border)
         print("|" + msg.ljust(len(border) - 2) + "|")
         print(border)
@@ -62,8 +62,6 @@ class ArkhamLogin:
                           headers=await self.headers(action='login'), 
                           json=await self.json_data(action='login')) as resp:
             response_text = await resp.text()
-            logger.info(f"Статус ответа: {resp.status}")
-            logger.info(f"Ответ сервера: {response_text}")
             
             if resp.status == 200:
                 try:

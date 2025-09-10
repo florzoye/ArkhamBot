@@ -6,7 +6,7 @@ from data import config
 
 class TwoCaptcha:
     def __init__(self, session: aiohttp.ClientSession, api_key: str | None = None):
-        self.api_key = api_key or config.API_KEY_2CAPTCHA
+        self.api_key = api_key 
         self.session = session
 
     async def captcha_data(self, action: str | None = None, task_id: str | None = None):
@@ -32,7 +32,7 @@ class TwoCaptcha:
             answer = await resp.json()
             logger.info(f"Ответ при создании задачи: {answer}")
             if answer.get("status") == 1:
-                return answer["request"]  # task_id
+                return answer["request"]  
             return None
 
     async def check_complete_task(self, task_id: str):
@@ -42,7 +42,7 @@ class TwoCaptcha:
                 answer = await resp.json()
                 if answer.get("status") == 1:
                     logger.success("Капча решена!")
-                    return answer["request"]  # токен
+                    return answer["request"]  #
                 if answer.get("request") == "CAPCHA_NOT_READY":
                     logger.info(f"Попытка {attempt+1}: капча ещё не готова, ждём...")
                     await asyncio.sleep(5)

@@ -1,11 +1,8 @@
-from data.config import Leverage
 import math
-
 class PositionSizer:
-    def __init__(self, balance: float, leverage: int | Leverage, price: float, risk_pct: float):
-        if isinstance(leverage, Leverage):
-            leverage = leverage.value
-
+    def __init__(self, balance: float, leverage: int , price: float, risk_pct: float | int):
+        self.leverage = leverage
+        
         if not (1 <= int(leverage) <= 25):
             raise ValueError("Плечо должно быть от 1 до 25")
         if not (0 < risk_pct <= 100):

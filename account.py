@@ -1,17 +1,19 @@
 # account.py
 import aiohttp
 import asyncio
-from pydantic import BaseModel
 from typing import Optional
+from pydantic import BaseModel
 from rich.console import Console
 
-from utils.get_prices import ArkhamPrices
-from src.account.info import ArkhamInfo
-from src.account.login import ArkhamLogin
-from src.trade.trading_client import ArkhamTrading
 from db.manager import AsyncDatabaseManager
+
+from src.account.info import ArkhamInfo
+from src.trade.trading_client import ArkhamTrading
+
+from utils.get_prices import ArkhamPrices
 from utils.cookies import check_cookies_from_db
 from utils.session import GlobalSessionManager
+
 from data import config
 
 console = Console()

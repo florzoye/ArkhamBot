@@ -163,7 +163,28 @@ class TradeSQL:
             except Exception as e:
                 logger.error(f"Ошибка обновления данных аккаунта '{account}': {e}")
                 raise
+    async def delete_account(self, table_name: str, account: str) -> bool:
+        """Удалить конкретный аккаунт из таблицы"""
+        try:
+            # Проверяем существует ли аккаунт
+            existing_account = await self.get_account(table_name, account)
+            if not existing_account:
+                logger.warning(f"Аккаунт '{account}' не найден в таблице '{table_name}'")
+                return False
 
+            # Удаляем аккаунт
+            await self.db.execute(
+                f"DELETE FROM {table_name} WHERE account = :account",
+                {"account": account}
+            )
+            
+            logger.success(f"Аккаунт '{account}' успешно удален из таблицы '{table_name}'")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка удаления аккаунта '{account}': {e}")
+            return False
+        
     async def check_cookies_valid(self, table_name: str, account: str) -> bool:
         """Проверить валидность куков для аккаунта"""
         return await check_cookies_from_db(self.db, table_name, account)

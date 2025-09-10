@@ -50,7 +50,7 @@ class ArkhamLeverage:
 
             await self.check_leverage(symbol, leverage=leverage)
 
-    async def check_leverage(self, symbol: str, leverage: str | int|  None = None):
+    async def check_leverage(self, symbol: str, leverage: int |  None = None):
         """Проверить текущее кредитное плечо для заданного символа"""
         async with self.session.get(
             'https://arkm.com/api/account/leverage',
@@ -60,10 +60,25 @@ class ArkhamLeverage:
             data = await response.json()
             for item in data:
                 if item["symbol"] == f"{symbol}_USDT_PERP":
-                    if item['leverage'] ==  leverage:
+                    if int(item['leverage']) ==  int(leverage):
                         print(f"✅ Плечо для {symbol} подтверждено: {item['leverage']}x")
                     return item["leverage"]
             print(f"⚠️ Не нашли символ {symbol} в ответе")
             return None
+    
+    async def leverage_seen(self, symbol: str):
+        """Проверить текущее кредитное плечо для заданного символа"""
+        async with self.session.get(
+            'https://arkm.com/api/account/leverage',
+            params=await self.create_json_data(),
+            headers=await self.headers()
+        ) as response:
+            data = await response.json()
+            for item in data:
+                if item["symbol"] == f"{symbol}_USDT_PERP":
+                    return item["leverage"]
+            print(f"⚠️ Не нашли символ {symbol} в ответе")
+            return None
+
 
 

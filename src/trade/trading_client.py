@@ -247,44 +247,47 @@ class ArkhamTrading:
     
     async def futures_close_position_market(self):
         """
-        АВТОМАТИЧЕСКОЕ закрытие позиции на фьючерсах по рынку
-        Определяет тип позиции (long/short) и размер автоматически
+        Закрывает ВСЕ открытые фьючерсные позиции по рынку (reduceOnly).
         """
         if not self.info_client:
             raise ValueError("Для автоматического закрытия нужен info_client")
         
         positions = await self.info_client.get_all_positions()
         
-        if self.coin not in positions:
-            logger.warning(f"Позиция по {self.coin} не найдена")
+        if not positions:
+            logger.warning("Нет открытых позиций для закрытия")
             return False
-            
-        position = positions[self.coin]
-        position_size = position["base"]
-        
-        if position_size == 0:
-            logger.warning(f"Размер позиции по {self.coin} равен нулю")
-            return False
-        
-        if position_size > 0:
-            side = "sell"
-            direction = "LONG"
-        else:
-            side = "buy"
-            direction = "SHORT"
-            position_size = abs(position_size)  
-            
-        order_data = self._create_order_data(
-            side=side,
-            order_type="market",
-            is_futures=True,
-            reduce_only=True,
-            use_custom_size=True,
-            custom_size=position_size
-        )
-        
-        action = f"Futures АВТОЗАКРЫТИЕ {direction} {self.coin} на {position_size} успешно выполнено!"
-        return await self._send_order_request(order_data, action)
+
+        results = {}
+
+        for coin, position in positions.items():
+            position_size = position["base"]
+            if position_size == 0:
+                continue
+
+            if position_size > 0:
+                side = "sell"
+                direction = "LONG"
+            else:
+                side = "buy"
+                direction = "SHORT"
+                position_size = abs(position_size)
+
+            order_data = self._create_order_data(
+                side=side,
+                order_type="market",
+                is_futures=True,
+                reduce_only=True,
+                use_custom_size=True,
+                custom_size=position_size
+            )
+
+            action = f"Futures АВТОЗАКРЫТИЕ {direction} {coin} на {position_size} успешно выполнено!"
+            result = await self._send_order_request(order_data, action)
+            results[coin] = result
+
+        return results  # словарь вида {"BTC": True, "ETH": False, ...}
+
     
     async def futures_close_long_market(self, position_size: float = None):
         """Закрытие лонг позиции на фьючерсах по рынку (ручное указание размера)"""

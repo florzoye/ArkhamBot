@@ -17,15 +17,14 @@ from db.manager import AsyncDatabaseManager
 from utils.session import session_manager
 from utils.cookies import (
     save_cookies_to_account,
-    check_cookies_from_db,
     check_cookies_from_account,
     apply_cookies_from_db
 )
 from utils.captcha import TwoCaptcha
-
-from src.account.info import ArkhamInfo
 from src.account.login import ArkhamLogin
 from src.trade.trading_client import ArkhamTrading
+from utils.leverage import ArkhamLeverage
+from utils.size_calc import PositionSizer
 
 from account import Account
 from data import config
@@ -211,7 +210,6 @@ async def start_menu() -> Optional[Account]:
 
     return None
 
-
 async def main_menu(account: Account):
     """Главное меню с основной функциональностью"""
     global current_account
@@ -220,7 +218,7 @@ async def main_menu(account: Account):
     while not shutdown_event.is_set():
         try:
             console.print(
-                f"\n[bold blue]🚀 ARKHAM TRADING SYSTEM[/bold blue] — [green]{account.account}[/green]",
+                f"\n[bold blue]🚀 ARKHAM TRADING SYSTEM[/bold blue] — [green]{current_account.account}[/green]",
                 justify="center"
             )
 
@@ -228,26 +226,30 @@ async def main_menu(account: Account):
                 message="Выберите действие:",
                 choices=[
                     "📂 Управление базой данных",
-                    "🔐 Обновить данные аккаунта",
                     "💹 Торговые операции",
-                    "📊 Информация и аналитика",
-                    "⚙️ Настройки и конфигурация",
+                    "📊 Информация об аккаунте",
                     "❌ Выход",
                 ],
-                default="📊 Информация и аналитика",
+                default="📂 Управление базой данных",
             ).execute_async()
 
             match choice:
                 case "📂 Управление базой данных":
-                    await database_menu(account)
-                case "🔐 Обновить данные аккаунта":
-                    await auth_menu(account)
+                    result = await database_menu(current_account)
+                    
+                    if result is None:
+                        console.print("[yellow]⚠️ Завершение работы программы...[/yellow]")
+                        return
+                    elif isinstance(result, Account) and result.account != current_account.account:
+                        await current_account.close_session()  
+                        current_account = result
+                        console.print(f"[green]✅ Переключились на аккаунт: {current_account.account}[/green]")
+                        
                 case "💹 Торговые операции":
-                    await trading_menu(account)
-                case "📊 Информация и аналитика":
-                    await analytics_menu(account)
-                case "⚙️ Настройки и конфигурация":
-                    await settings_menu(account)
+                    await trading_menu(current_account)
+                case "📊 Информация об аккаунте":
+                    await show_basic_account_info(current_account)
+
                 case "❌ Выход":
                     return
 
@@ -259,22 +261,62 @@ async def main_menu(account: Account):
             console.print(f"[red]❌ Ошибка в главном меню: {e}[/red]")
             await asyncio.sleep(1)
 
-
 # --- Подменю ---
 async def database_menu(account: Account):
-    console.print("[yellow]📂 Меню управления базой данных (в разработке)[/yellow]")
-    await asyncio.sleep(1)
+    """Меню управления базой данных"""
+    while not shutdown_event.is_set():
+        try:
+            console.print("[yellow]📂 Меню управления базой данных[/yellow]", justify='center')
 
-async def auth_menu(account: Account):
-    console.print("[yellow]🔐 Меню аутентификации (в разработке)[/yellow]")
-    await asyncio.sleep(1)
+            choice = await inquirer.select(
+                message="Выберите действие:",
+                choices=[
+                    "🗑️ Очистить таблицу",
+                    "❌ Удалить конкретный аккаунт", 
+                    "📋 Показать все аккаунты",
+                    "⬅️ Назад"
+                ],
+                default="📋 Показать все аккаунты"
+            ).execute_async()
 
-async def trading_menu(account: Account):
-    console.print("[yellow]💹 Меню торговых операций (в разработке)[/yellow]")
-    await asyncio.sleep(1)
+            match choice:
+                case "🗑️ Очистить таблицу":
+                    await clear_table_action()
+                    
+                case "❌ Удалить конкретный аккаунт":
+                    console.print("[yellow]⚠️ Внимание: Если у вас один аккаунт, то при удалении программа завершится![/yellow]")
+                    result = await delete_account_action(account)
+                    if result == "account_deleted":
+                        console.print("[yellow]⚠️ Текущий аккаунт был удален. Необходимо выбрать другой аккаунт.[/yellow]")
+                        new_account = await select_account()
+                        if new_account:
+                            console.print(f"[green]✅ Выбран новый аккаунт: {new_account.account}[/green]")
+                            return new_account 
+                        else:
+                            console.print("[red]❌ Аккаунт не выбран. Завершение работы.[/red]")
+                            return None
+                    elif result == "other_deleted":
+                        continue
+                    elif result == "cancelled":
+                        continue
+                        
+                case "📋 Показать все аккаунты":
+                    await show_all_accounts()
+                    
+                case "⬅️ Назад":
+                    return account  
 
-async def analytics_menu(account: Account):
-    """Простое меню аналитики"""
+        except KeyboardInterrupt:
+            return account
+        except Exception as e:
+            if not shutdown_event.is_set():
+                console.print(f"[red]❌ Ошибка в меню БД: {e}[/red]")
+                await asyncio.sleep(1)
+
+    return account
+
+async def show_basic_account_info(account: Account):
+    """Показать базовую информацию об аккаунте"""
     try:
         console.print("[blue]📊 Загрузка информации об аккаунте...[/blue]")
 
@@ -288,29 +330,302 @@ async def analytics_menu(account: Account):
         if shutdown_event.is_set():
             return
 
-        table = Table(title=f"📊 Информация об аккаунте: {account.account}")
-        table.add_column("Параметр", style="cyan")
-        table.add_column("Значение", style="green")
+        table = Table(title=f"📊 Основная информация: {account.account}")
+        table.add_column("Параметр", style="cyan", width=25)
+        table.add_column("Значение", style="green", width=20)
 
-        table.add_row("💰 Баланс", str(balance))
+        table.add_row("💰 Баланс", f"${balance:.2f}")
         table.add_row("🏆 Очки", str(points))
-        table.add_row("📈 Объем торгов", str(volume))
+        table.add_row("📈 Объем торгов", f"${volume:.2f}")
+        table.add_row("💸 Маржа для комиссий", f"${account.margin_fee:.2f}")
+        table.add_row("🎁 Маржа бонус", f"${account.margin_bonus:.2f}")
 
         console.print(table)
 
         if not shutdown_event.is_set():
-            await inquirer.text(message="Нажмите Enter для возврата в меню...").execute_async()
+            await inquirer.text(message="Нажмите Enter для продолжения...").execute_async()
 
     except Exception as e:
         if not shutdown_event.is_set():
-            console.print(f"[red]❌ Ошибка получения аналитики: {e}[/red]")
+            console.print(f"[red]❌ Ошибка получения базовой информации: {e}[/red]")
             await asyncio.sleep(2)
 
-async def settings_menu(account: Account):
-    console.print("[yellow]⚙️ Меню настроек (в разработке)[/yellow]")
-    await asyncio.sleep(1)
+async def trading_menu(account: Account):
+    """Главное меню аккаунта"""
+    while True:
+        await account.initialize_clients()
+
+        choice = await inquirer.select(
+            message="Выберите действие:",
+            choices=[
+                "📋 Мои позиции",
+                "📈 Открыть LONG",
+                "📉 Открыть SHORT",
+                "❌ Закрыть все позиции",
+                "⬅️ Выйти",
+            ],
+                default="📋 Мои позиции"
+        ).execute_async()
+
+        match choice:
+            case "📋 Мои позиции":
+                await positions_and_balances_menu(account)
+
+            case "📈 Открыть LONG":
+                await open_position(account, side="long")
+
+            case "📉 Открыть SHORT":
+                await open_position(account, side="short")
+
+            case "❌ Закрыть все позиции":
+                await close_all_positions(account)
+
+            case "⬅️ Выйти":
+                break
+
+
+async def positions_and_balances_menu(account: Account):
+    """Меню: просмотр и закрытие позиций"""
+    try:
+        await account.initialize_clients()
+        positions = await account.arkham_info.get_all_positions()
+
+        if not positions:
+            console.print("[yellow]⚠️ У вас нет открытых позиций[/yellow]")
+            await asyncio.sleep(2)
+            return
+
+        # Показываем таблицу
+        table = Table(title="📋 Мои позиции")
+        table.add_column("Монета", style="cyan")
+        table.add_column("Размер", style="green")
+        table.add_column("Направление", style="blue")
+        table.add_column("Маржа", style="yellow")
+        table.add_column("PnL", style="magenta")
+        table.add_column("Entry", style="gray")
+
+
+        for coin, pos in positions.items():
+            size = pos.get("base", 0)
+            direction = "LONG" if float(size) > 0 else "SHORT"
+            table.add_row(
+                coin,
+                str(size),
+                direction,
+                str(pos.get("value", "N/A")),
+                str(pos.get("pnl", "N/A")),
+                str(pos.get('entry', "N/A"))
+            )
+
+        console.print(table)
+
+        # Выбор действия
+        choice = await inquirer.select(
+            message="Выберите позицию для закрытия или вернитесь назад:",
+            choices=list(positions.keys()) + ["⬅️ Назад"]
+        ).execute_async()
+
+        if choice == "⬅️ Назад":
+            return
+
+        # Закрываем выбранную позицию
+        position = positions[choice]
+        size = abs(position["base"])
+        direction = "LONG" if float(position["base"]) > 0 else "SHORT"
+
+        trader = ArkhamTrading(
+            session=account.session,
+            coin=choice,
+            size=size,
+            info_client=account.arkham_info
+        )
+
+        console.print(f"[blue]📊 Закрываем {direction} по {choice} на {size}[/blue]")
+
+        if direction == "LONG":
+            success = await trader.futures_close_long_market(position_size=size)
+        else:
+            success = await trader.futures_close_short_market(position_size=size)
+
+        if success:
+            console.print(f"[green]✅ Позиция {choice} закрыта![/green]")
+        else:
+            console.print(f"[red]❌ Ошибка закрытия позиции {choice}[/red]")
+
+        await asyncio.sleep(2)
+
+    except Exception as e:
+        console.print(f"[red]❌ Ошибка в меню позиций: {e}[/red]")
+        await asyncio.sleep(2)
+
+async def open_position(account: Account, side: str):
+    coin = str(await inquirer.text(message="Введите монету (например BTC):").execute_async())
+
+    # получаем цену
+    price = dict(await account.arkham_price.get_futures_price(coin))['price']
+    if not price:
+        console.print(f"[red]❌ Не удалось получить цену {coin}[/red]")
+        return
+
+    # спрашиваем % от депо
+    percent = await inquirer.number(
+        message="Какой процент от депозита использовать?",
+    ).execute_async()
+
+    leverage_raw = (await inquirer.text(message="Введите плечо для вашей сделки (1 - 20):").execute_async())
+    try:
+        console.print('ПРОШЕЛ')
+        leverage = await ArkhamLeverage(account.session).check_leverage(coin.upper(), int(leverage_raw))
+    except (TypeError, ValueError):
+        console.print(f'Не удалось поставить плечо... Используем дефолтное - {config.DEFAULT_LEVERAGE}')
+        leverage = config.DEFAULT_LEVERAGE
+
+    # рассчитываем размер позиции
+    size = PositionSizer(account.balance, int(leverage), float(price), float(percent)).calculate_size()
+    console.print('CER')
+    trader = ArkhamTrading(
+        session=account.session,
+        coin=coin,
+        size=size,
+        info_client=account.arkham_info
+    )
+    console.print('CExxx')
+
+    if side == "long":
+        success = await trader.futures_long_market()
+    else:
+        success = await trader.futures_short_market()
+
+    if success:
+        console.print(f"[green]✅ {side.upper()} по {coin} открыт[/green]")
+    else:
+        console.print(f"[red]❌ Ошибка открытия позиции[/red]")
+
+async def close_all_positions(account: Account):
+    trader = ArkhamTrading(
+        session=account.session,
+        coin='LOLKEK',       # Все нормально, так нужно!!!
+        size='2 бутерброда', # Все нормально, так нужно!!!
+        info_client=account.arkham_info)
+    results = await trader.futures_close_position_market()
+    if results:
+        console.print(f"[green]✅ Закрыты все позиции: {list(results.keys())}[/green]")
+    else:
+        console.print("[yellow]⚠️ Нет открытых позиций[/yellow]")
+    await asyncio.sleep(2)
+    
 
 # --- Работа с аккаунтами и БД ---
+async def clear_table_action():
+    """Очистка таблицы с подтверждением"""
+    try:
+        confirmation = await inquirer.select(
+            message="⚠️ Вы уверены, что хотите очистить всю таблицу? Это действие необратимо!",
+            choices=["❌ НЕТ, отмена", "✅ ДА, очистить"],
+            default="❌ НЕТ, отмена"
+        ).execute_async()
+        
+        if confirmation == "✅ ДА, очистить":
+            trade_table = TradeSQL(db)
+            await trade_table.clear_table(config.TABLE_NAME)
+            console.print("[green]✅ Таблица очищена[/green]")
+        else:
+            console.print("[yellow]⚠️ Очистка отменена[/yellow]")
+            
+    except Exception as e:
+        console.print(f"[red]❌ Ошибка очистки таблицы: {e}[/red]")
+
+async def delete_account_action(current_account: Account) -> str:
+    """
+    Удаление конкретного аккаунта
+    
+    Returns:
+        "account_deleted" - если удален текущий аккаунт
+        "other_deleted" - если удален другой аккаунт  
+        "cancelled" - если операция отменена
+    """
+    try:
+        trade_table = TradeSQL(db)
+        accounts = await trade_table.get_all(config.TABLE_NAME)
+        
+        if not accounts:
+            console.print("[red]❌ Нет аккаунтов в базе данных[/red]")
+            return "cancelled"
+            
+        account_names = [acc.get("account", "Unknown") for acc in accounts]
+        
+        selected_name = await inquirer.select(
+            message="Выберите аккаунт для удаления:",
+            choices=account_names + ["❌ Отмена"]
+        ).execute_async()
+        
+        if selected_name == "❌ Отмена" or shutdown_event.is_set():
+            return "cancelled"
+            
+        # Подтверждение удаления
+        confirmation = await inquirer.select(
+            message=f"⚠️ Удалить аккаунт '{selected_name}'? Это действие необратимо!",
+            choices=["❌ НЕТ, отмена", "✅ ДА, удалить"],
+            default="❌ НЕТ, отмена"
+        ).execute_async()
+        
+        if confirmation == "✅ ДА, удалить":
+            success = await trade_table.delete_account(config.TABLE_NAME, selected_name)
+            
+            if success:
+                console.print(f"[green]✅ Аккаунт '{selected_name}' успешно удален[/green]")
+                
+                # Проверяем, удален ли текущий активный аккаунт
+                if selected_name == current_account.account:
+                    return "account_deleted"
+                else:
+                    return "other_deleted"
+            else:
+                console.print(f"[red]❌ Не удалось удалить аккаунт '{selected_name}'[/red]")
+                return "cancelled"
+        else:
+            console.print("[yellow]⚠️ Удаление отменено[/yellow]")
+            return "cancelled"
+            
+    except Exception as e:
+        console.print(f"[red]❌ Ошибка удаления аккаунта: {e}[/red]")
+        return "cancelled"
+
+
+async def show_all_accounts():
+    """Показать все аккаунты в виде таблицы"""
+    try:
+        trade_table = TradeSQL(db)
+        accounts = await trade_table.get_all(config.TABLE_NAME)
+        
+        if not accounts:
+            console.print("[red]❌ Нет аккаунтов в базе данных[/red]")
+            return
+            
+        table = Table(title="📋 Все аккаунты в базе данных")
+        table.add_column("Аккаунт", style="cyan")
+        table.add_column("Email", style="green") 
+        table.add_column("Баланс", style="yellow")
+        table.add_column("Объем", style="blue")
+        table.add_column("Очки", style="magenta")
+        
+        for acc in accounts:
+            table.add_row(
+                str(acc.get("account", "N/A")),
+                str(acc.get("email", "N/A")), 
+                str(acc.get("balance", "N/A")),
+                str(acc.get("volume", "N/A")),
+                str(acc.get("points", "N/A"))
+            )
+            
+        console.print(table)
+        
+        if not shutdown_event.is_set():
+            await inquirer.text(message="Нажмите Enter для продолжения...").execute_async()
+            
+    except Exception as e:
+        console.print(f"[red]❌ Ошибка получения списка аккаунтов: {e}[/red]")
+
 async def select_account() -> Optional[Account]:
     """Выбор аккаунта из базы данных"""
     try:
@@ -335,18 +650,15 @@ async def select_account() -> Optional[Account]:
 
         await account.create_session()
 
-        # Загружаем куки из БД и устанавливаем их в сессию
         cookies_loaded = await apply_cookies_from_db(account.session, db, config.TABLE_NAME, account.account)
         
         if cookies_loaded:
             console.print("[green]✅ Куки загружены из БД в сессию[/green]")
             
-            # Загружаем куки в объект account для проверки валидности
             cookies_from_db = await trade_table.get_cookies(config.TABLE_NAME, account.account)
             if cookies_from_db:
                 account.cookies = cookies_from_db
             
-            # Проверяем валидность уже установленных куки
             cookies_valid = await check_cookies_from_account(account)
             
             if cookies_valid:
@@ -369,7 +681,6 @@ async def select_account() -> Optional[Account]:
         else:
             console.print("[yellow]⚠️ Куки в БД не найдены[/yellow]")
 
-        # Если куки не найдены или не валидны - логинимся заново
         console.print("[blue]🔐 Выполняется повторная авторизация...[/blue]")
         account = await login_arkham(account)
         
@@ -379,7 +690,6 @@ async def select_account() -> Optional[Account]:
             
         await account.update_data()
         
-        # Сохраняем новые куки
         await save_cookies_to_account(account.session, account)
         await trade_table.update_account_data(
             config.TABLE_NAME,
@@ -472,7 +782,7 @@ async def add_account() -> Optional[Account]:
             await account.close_session()
             return None
         
-        await save_account_to_db(account, balance, points, volume, margin_fee, margin_bonus)
+        await save_account_to_db(account, points, volume, balance, margin_fee, margin_bonus)
         
         return account
         
