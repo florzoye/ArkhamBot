@@ -51,4 +51,13 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Запуск торгового бота
-python menu.py 
+python menu.py
+```
+
+### Next features realeses
+
+1. Spot торговля (нужно доработать получение спотового баланса)
+2. Telegram бот для UI-взаимодействия
+3. Многопоточный режим
+
+### Если есть желаение помочь с реализацией, то форкайте эту веткку или отпишите в телеграмм @xflorzoye ###
